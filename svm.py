@@ -77,12 +77,26 @@ precision, recall, threshold = sklearn.metrics.precision_recall_curve(testTarget
 #precision, recall, threshold = sklearn.metrics.precision_recall_curve(testTarget,yScore[:0])
 average_precision = sklearn.metrics.average_precision_score(testTarget, yScore, average="micro")
 
-indexEarn = targetUnique.tolist().index('earn')
-precisionEarn, recallEarn, thresholdEarn = sklearn.metrics.precision_recall_curve(testTarget[:,indexEarn],yScore[:,indexEarn])
-average_precisionEarn = sklearn.metrics.average_precision_score(testTarget[:,indexEarn], yScore[:,indexEarn])
+indexClass = dict()
+precisionClass = dict()
+recallClass = dict()
+average_precisionClass = dict()
 
+classesToPlot = ['earn', 'acq', 'money-fx', 'grain', 'crude', 'trade', 'interest', 'ship', 'wheat', 'corn']
 
+for className in classesToPlot:
+	indexClass[className] = targetUnique.tolist().index(className)
 
+	precisionClass[className], recallClass[className], _ = sklearn.metrics.precision_recall_curve(testTarget[:,indexClass[className]],yScore[:,indexClass[className]])
+	average_precisionClass[className] = sklearn.metrics.average_precision_score(testTarget[:,indexClass[className]], yScore[:,indexClass[className]])
+
+numClasses = testTarget.shape[1]
+precisionAll = dict()
+recallAll = dict()
+average_precisionAll = dict()
+for i in range(numClasses):
+	precisionAll[i], recallAll[i], _ = sklearn.metrics.precision_recall_curve(testTarget[:,i],yScore[:,i])
+	average_precisionAll[i] = sklearn.metrics.average_precision_score(testTarget[:,i], yScore[:,i])
 
 plt.clf()
 ax = plt.figure().gca()
@@ -90,15 +104,24 @@ ax.set_xticks(np.arange(0,1,0.05))
 ax.set_yticks(np.arange(0,1.,0.05))
 plt.xticks(rotation='vertical')
 plt.plot([0.,1.],[0.,1.], color='blue')
-plt.plot(recall, precision, color='gold', lw=2, label='micro-average Precision-recall curve (area = {0:0.2f})'''.format(average_precision))
-plt.plot(recallEarn, precisionEarn, color='red', lw=2, label='"earn" class Precision-recall curve (area = {0:0.2f})'''.format(average_precisionEarn))
+for i in range(numClasses):
+	plt.plot(recallAll[i], precisionAll[i], color='black')
+for className in classesToPlot:
+	plt.plot(recallClass[className], precisionClass[className], lw=2, label='"{0}",{1:0.2f}'''.format(className, average_precisionClass[className]))
+
+plt.plot(recall, precision, color='gold', lw=2, label='microAvg,{0:0.2f}'''.format(average_precision))
+#plt.plot(recallEarn, precisionEarn, color='red', lw=2, label='"earn" class Precision-recall curve (area = {0:0.2f})'''.format(average_precisionEarn))
 
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
 plt.xlabel('Recall')
 plt.ylabel('Precision')
 plt.title('Precision-Recall curve')
-plt.legend(loc="lower right")
+ax = plt.axes()
+box = ax.get_position()
+ax.set_position([box.x0, box.y0, box.width * 0.7, box.height])
+
+plt.legend(loc="upper left", bbox_to_anchor=(1., 1.), fancybox=True, shadow=True)
 plt.grid()
 plt.savefig(filePrecRecall)
 
