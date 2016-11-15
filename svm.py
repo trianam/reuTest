@@ -35,8 +35,8 @@ random_state = np.random.RandomState(0)
 
 stemmer = nltk.stem.snowball.EnglishStemmer(ignore_stopwords=True)
 analyzer = sl.feature_extraction.text.CountVectorizer(analyzer='word', token_pattern=tokenPattern).build_analyzer()
-#modAnalyzer = lambda doc: (stemmer.stem(w) for w in analyzer(doc))
-modAnalyzer = analyzer
+modAnalyzer = lambda doc: (stemmer.stem(w) for w in analyzer(doc))
+#modAnalyzer = analyzer
 
 time0 = time.time()
 
@@ -61,7 +61,8 @@ np.savetxt(fileTokens, countVec.get_feature_names(), '%s')
 
 print("{0:.1f} sec - Training".format(time.time()-time0))
 targetUnb = dfReuters.category.tolist()
-target = sl.preprocessing.label_binarize(targetUnb, np.unique(targetUnb))
+targetUnique = np.unique(targetUnb)
+target = sl.preprocessing.label_binarize(targetUnb, targetUnique)
 #target = np.array(list(map(str, dfReuters.category.tolist())))
 
 trainMatrix, testMatrix, trainTarget, testTarget = sl.cross_validation.train_test_split(termMatrix.tocsr(), target, test_size=.1, random_state=random_state)
@@ -71,9 +72,17 @@ clf = sklearn.multiclass.OneVsRestClassifier(sklearn.svm.LinearSVC(random_state=
 
 yScore = clf.fit(trainMatrix, trainTarget).decision_function(testMatrix)
 
+
 precision, recall, threshold = sklearn.metrics.precision_recall_curve(testTarget.ravel(),yScore.ravel())
 #precision, recall, threshold = sklearn.metrics.precision_recall_curve(testTarget,yScore[:0])
 average_precision = sklearn.metrics.average_precision_score(testTarget, yScore, average="micro")
+
+indexEarn = targetUnique.tolist().index('earn')
+precisionEarn, recallEarn, thresholdEarn = sklearn.metrics.precision_recall_curve(testTarget[:,indexEarn],yScore[:,indexEarn])
+average_precisionEarn = sklearn.metrics.average_precision_score(testTarget[:,indexEarn], yScore[:,indexEarn])
+
+
+
 
 plt.clf()
 ax = plt.figure().gca()
@@ -82,6 +91,7 @@ ax.set_yticks(np.arange(0,1.,0.05))
 plt.xticks(rotation='vertical')
 plt.plot([0.,1.],[0.,1.], color='blue')
 plt.plot(recall, precision, color='gold', lw=2, label='micro-average Precision-recall curve (area = {0:0.2f})'''.format(average_precision))
+plt.plot(recallEarn, precisionEarn, color='red', lw=2, label='"earn" class Precision-recall curve (area = {0:0.2f})'''.format(average_precisionEarn))
 
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
