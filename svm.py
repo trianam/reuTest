@@ -28,10 +28,10 @@ fileTokens = "./"+outputDir+"/tokensSvm-"+timestamp+".txt"
 filePrecRecall = "./"+outputDir+"/precisionRecallSvm-"+timestamp+".pdf"
 
 
-cutOff = 3
+cutOff = 2
 tokenPattern = '(?u)\\b\\w*[a-zA-z_][a-zA-Z_]+\\w*\\b'
 
-random_state = np.random.RandomState(0)
+random_state = np.random.RandomState(1)
 
 stemmer = nltk.stem.snowball.EnglishStemmer(ignore_stopwords=True)
 analyzer = sl.feature_extraction.text.CountVectorizer(analyzer='word', token_pattern=tokenPattern).build_analyzer()
@@ -50,7 +50,9 @@ for cat in reuters.categories():
                 i = i+1
 
 print("{0:.1f} sec - Tokenizing".format(time.time()-time0))
-countVec = sklearn.feature_extraction.text.CountVectorizer(min_df=cutOff, strip_accents='unicode', analyzer=modAnalyzer, stop_words=stemmer.stopwords)
+#countVec = sklearn.feature_extraction.text.CountVectorizer(min_df=cutOff, strip_accents='unicode', analyzer=modAnalyzer, stop_words=stemmer.stopwords)
+#countVec = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, strip_accents='unicode', analyzer=modAnalyzer, stop_words=stemmer.stopwords)
+countVec = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, max_df=0.5, max_features=9947, analyzer=modAnalyzer, stop_words=stemmer.stopwords)
 termMatrix = countVec.fit_transform(dfReuters.text)
 
 #dfTerm = pd.DataFrame(termMatrix.toarray(), columns=countvec.get_feature_names())
