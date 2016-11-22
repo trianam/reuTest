@@ -31,7 +31,7 @@ filePrecRecall = "./"+outputDir+"/precisionRecallSvm-"+timestamp+".pdf"
 cutOff = 2
 tokenPattern = '(?u)\\b\\w*[a-zA-z_][a-zA-Z_]+\\w*\\b'
 
-random_state = np.random.RandomState(1)
+random_state = np.random.RandomState(42)
 
 stemmer = nltk.stem.snowball.EnglishStemmer(ignore_stopwords=True)
 analyzer = sl.feature_extraction.text.CountVectorizer(analyzer='word', token_pattern=tokenPattern).build_analyzer()
@@ -49,11 +49,16 @@ for cat in reuters.categories():
                 dfReuters.loc[i] = [reuters.raw(doc), cat]
                 i = i+1
 
+targetUnb = dfReuters.category.tolist()
+targetUnique = np.unique(targetUnb)
+trainX, testX, trainY, testY = sl.cross_validation.train_test_split(dfReuters.text, targetUnb, test_size=.2, random_state=random_state)
+
 print("{0:.1f} sec - Tokenizing".format(time.time()-time0))
 #countVec = sklearn.feature_extraction.text.CountVectorizer(min_df=cutOff, strip_accents='unicode', analyzer=modAnalyzer, stop_words=stemmer.stopwords)
 #countVec = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, strip_accents='unicode', analyzer=modAnalyzer, stop_words=stemmer.stopwords)
 countVec = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, max_df=0.5, max_features=9947, analyzer=modAnalyzer, stop_words=stemmer.stopwords)
-termMatrix = countVec.fit_transform(dfReuters.text)
+trainMatrix = countVec.fit_transform(trainX)
+testMatrix = countVec.transform(testX)
 
 #dfTerm = pd.DataFrame(termMatrix.toarray(), columns=countvec.get_feature_names())
 
@@ -62,12 +67,12 @@ termMatrix = countVec.fit_transform(dfReuters.text)
 np.savetxt(fileTokens, countVec.get_feature_names(), '%s')
 
 print("{0:.1f} sec - Training".format(time.time()-time0))
-targetUnb = dfReuters.category.tolist()
-targetUnique = np.unique(targetUnb)
-target = sl.preprocessing.label_binarize(targetUnb, targetUnique)
+labelBinarizer = sklearn.preprocessing.LabelBinarizer(neg_label = -1, pos_label = 1, sparse_output = False)
+trainTarget = labelBinarizer.fit_transform(trainY)
+testTarget = labelBinarizer.transform(testY)
+#target = sl.preprocessing.label_binarize(targetUnb, targetUnique)
 #target = np.array(list(map(str, dfReuters.category.tolist())))
 
-trainMatrix, testMatrix, trainTarget, testTarget = sl.cross_validation.train_test_split(termMatrix.tocsr(), target, test_size=.1, random_state=random_state)
 
 #clf = sklearn.multiclass.OneVsRestClassifier(sklearn.svm.SVC(kernel='linear', probability=True, random_state=random_state))
 clf = sklearn.multiclass.OneVsRestClassifier(sklearn.svm.LinearSVC(random_state=random_state))
