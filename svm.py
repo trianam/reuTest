@@ -40,49 +40,38 @@ modAnalyzer = lambda doc: (stemmer.stem(w) for w in analyzer(doc))
 
 time0 = time.time()
 
-print("{0:.1f} sec - Creating dataframe".format(time.time()-time0))
-dfReuters = pd.DataFrame(columns=['text','category'])
+print("{0:.1f} sec - Creating dataset".format(time.time()-time0))
 
-i=0
-for cat in reuters.categories():
-        for doc in reuters.fileids(cat):
-                dfReuters.loc[i] = [reuters.raw(doc), cat]
-                i = i+1
+catIndex = dict()
 
-targetUnb = dfReuters.category.tolist()
-targetUnique = np.unique(targetUnb)
-trainX, testX, trainY, testY = sl.cross_validation.train_test_split(dfReuters.text, targetUnb, test_size=.2, random_state=random_state)
+for i,cat in enumerate(reuters.categories()):
+    catIndex[cat] = i    
+
+X = np.empty(len(reuters.fileids()), dtype=object)
+Y = np.zeros((len(reuters.fileids()), len(reuters.categories())))
+
+for i,fid in enumerate(reuters.fileids()):
+    X[i] = reuters.raw(fid)
+    for cat in reuters.categories(fid):
+        Y[i,catIndex[cat]] = 1
+
+trainX, testX, trainY, testY = sl.cross_validation.train_test_split(X, Y, test_size=.2, random_state=random_state)
 
 print("{0:.1f} sec - Tokenizing".format(time.time()-time0))
-#countVec = sklearn.feature_extraction.text.CountVectorizer(min_df=cutOff, strip_accents='unicode', analyzer=modAnalyzer, stop_words=stemmer.stopwords)
-#countVec = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, strip_accents='unicode', analyzer=modAnalyzer, stop_words=stemmer.stopwords)
-countVec = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, max_df=0.5, max_features=9947, analyzer=modAnalyzer, stop_words=stemmer.stopwords)
-trainMatrix = countVec.fit_transform(trainX)
-testMatrix = countVec.transform(testX)
+vectorizer = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, max_df=0.5, max_features=9947, analyzer=modAnalyzer, stop_words=stemmer.stopwords)
+trainXV = vectorizer.fit_transform(trainX)
+testXV = vectorizer.transform(testX)
 
-#dfTerm = pd.DataFrame(termMatrix.toarray(), columns=countvec.get_feature_names())
-
-#sys.exit()
-
-np.savetxt(fileTokens, countVec.get_feature_names(), '%s')
+np.savetxt(fileTokens, vectorizer.get_feature_names(), '%s')
 
 print("{0:.1f} sec - Training".format(time.time()-time0))
-labelBinarizer = sklearn.preprocessing.LabelBinarizer(neg_label = -1, pos_label = 1, sparse_output = False)
-trainTarget = labelBinarizer.fit_transform(trainY)
-testTarget = labelBinarizer.transform(testY)
-#target = sl.preprocessing.label_binarize(targetUnb, targetUnique)
-#target = np.array(list(map(str, dfReuters.category.tolist())))
-
-
-#clf = sklearn.multiclass.OneVsRestClassifier(sklearn.svm.SVC(kernel='linear', probability=True, random_state=random_state))
 clf = sklearn.multiclass.OneVsRestClassifier(sklearn.svm.LinearSVC(random_state=random_state))
 
-yScore = clf.fit(trainMatrix, trainTarget).decision_function(testMatrix)
+yScore = clf.fit(trainXV, trainY).decision_function(testXV)
 
 
-precision, recall, threshold = sklearn.metrics.precision_recall_curve(testTarget.ravel(),yScore.ravel())
-#precision, recall, threshold = sklearn.metrics.precision_recall_curve(testTarget,yScore[:0])
-average_precision = sklearn.metrics.average_precision_score(testTarget, yScore, average="micro")
+precision, recall, threshold = sklearn.metrics.precision_recall_curve(testY.ravel(),yScore.ravel())
+average_precision = sklearn.metrics.average_precision_score(testY, yScore, average="micro")
 
 indexClass = dict()
 precisionClass = dict()
@@ -92,18 +81,18 @@ average_precisionClass = dict()
 classesToPlot = ['earn', 'acq', 'money-fx', 'grain', 'crude', 'trade', 'interest', 'ship', 'wheat', 'corn']
 
 for className in classesToPlot:
-	indexClass[className] = targetUnique.tolist().index(className)
+    index = catIndex[className]
 
-	precisionClass[className], recallClass[className], _ = sklearn.metrics.precision_recall_curve(testTarget[:,indexClass[className]],yScore[:,indexClass[className]])
-	average_precisionClass[className] = sklearn.metrics.average_precision_score(testTarget[:,indexClass[className]], yScore[:,indexClass[className]])
+    precisionClass[className], recallClass[className], _ = sklearn.metrics.precision_recall_curve(testY[:,index],yScore[:,index])
+    average_precisionClass[className] = sklearn.metrics.average_precision_score(testY[:,index], yScore[:,index])
 
-numClasses = testTarget.shape[1]
+numClasses = testY.shape[1]
 precisionAll = dict()
 recallAll = dict()
 average_precisionAll = dict()
 for i in range(numClasses):
-	precisionAll[i], recallAll[i], _ = sklearn.metrics.precision_recall_curve(testTarget[:,i],yScore[:,i])
-	average_precisionAll[i] = sklearn.metrics.average_precision_score(testTarget[:,i], yScore[:,i])
+    precisionAll[i], recallAll[i], _ = sklearn.metrics.precision_recall_curve(testY[:,i],yScore[:,i])
+    average_precisionAll[i] = sklearn.metrics.average_precision_score(testY[:,i], yScore[:,i])
 
 plt.clf()
 ax = plt.figure().gca()
@@ -112,12 +101,11 @@ ax.set_yticks(np.arange(0,1.,0.05))
 plt.xticks(rotation='vertical')
 plt.plot([0.,1.],[0.,1.], color='blue')
 for i in range(numClasses):
-	plt.plot(recallAll[i], precisionAll[i], color='black')
+    plt.plot(recallAll[i], precisionAll[i], color='black')
 for className in classesToPlot:
-	plt.plot(recallClass[className], precisionClass[className], lw=2, label='"{0}",{1:0.2f}'''.format(className, average_precisionClass[className]))
+    plt.plot(recallClass[className], precisionClass[className], lw=2, label='"{0}",{1:0.2f}'''.format(className, average_precisionClass[className]))
 
 plt.plot(recall, precision, color='gold', lw=2, label='microAvg,{0:0.2f}'''.format(average_precision))
-#plt.plot(recallEarn, precisionEarn, color='red', lw=2, label='"earn" class Precision-recall curve (area = {0:0.2f})'''.format(average_precisionEarn))
 
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
@@ -132,40 +120,30 @@ plt.legend(loc="upper left", bbox_to_anchor=(1., 1.), fancybox=True, shadow=True
 plt.grid()
 plt.savefig(filePrecRecall)
 
-notifier.sendMessage("Terminated "+timestamp+" execution ({0:.1f} sec)".format(time.time()-time0))
-
-print("{0:.1f} sec - End".format(time.time()-time0))
-
-sys.exit()
-#print("{0:.1f} - Score".format(time.time()-time0))
-#scoreSede = clfSede.score(testMatrix, testTargetSede)
-#scoreMorfologia = clfMorfo.score(testMatrix, testTargetMorfo)
-
 print("{0:.1f} sec - Predict".format(time.time()-time0))
-testPredictSede = clfSede.predict(testMatrix)
-testPredictMorfo = clfMorfo.predict(testMatrix)
+testPredict = clf.predict(testXV)
 
 print("{0:.1f} sec - Metrics".format(time.time()-time0))
 out_file = open(fileOut, 'w')
 
-out_file.write("f1 score sede micro average: ")
-out_file.write(str(sl.metrics.f1_score(list(map(str, testTargetSede)), list(map(str, testPredictSede)), average='micro')))
-out_file.write("\nf1 score sede macro average: ")
-out_file.write(str(sl.metrics.f1_score(list(map(str, testTargetSede)), list(map(str, testPredictSede)), average='macro')))
-
-out_file.write("\nf1 score morfologia micro average: ")
-out_file.write(str(sl.metrics.f1_score(list(map(str, testTargetMorfo)), list(map(str, testPredictMorfo)), average='micro')))
-out_file.write("\nf1 score morfologia macro average: ")
-out_file.write(str(sl.metrics.f1_score(list(map(str, testTargetMorfo)), list(map(str, testPredictMorfo)), average='macro')))
+out_file.write("precision score micro average: ")
+out_file.write(str(sl.metrics.precision_score(testY, testPredict, average='micro')))
+out_file.write("\nrecall score micro average: ")
+out_file.write(str(sl.metrics.recall_score(testY, testPredict, average='micro')))
+out_file.write("\nf1 score micro average: ")
+out_file.write(str(sl.metrics.f1_score(testY, testPredict, average='micro')))
+out_file.write("\nprecision score macro average: ")
+out_file.write(str(sl.metrics.precision_score(testY, testPredict, average='macro')))
+out_file.write("\nrecall score macro average: ")
+out_file.write(str(sl.metrics.recall_score(testY, testPredict, average='macro')))
+out_file.write("\nf1 score macro average: ")
+out_file.write(str(sl.metrics.f1_score(testY, testPredict, average='macro')))
 out_file.write("\n")
 out_file.close()
 
 out_file_details = open(fileOutDetail, 'w')
-
-out_file_details.write(sl.metrics.classification_report(list(map(str, testTargetSede)), list(map(str, testPredictSede))))
+out_file_details.write(sl.metrics.classification_report(testY, testPredict))
 out_file_details.write("\n")
-out_file_details.write(sl.metrics.classification_report(list(map(str, testTargetMorfo)), list(map(str, testPredictMorfo))))
-
 out_file_details.close()
 
 notifier.sendFile("Terminated "+timestamp+" execution ({0:.1f} sec)".format(time.time()-time0), fileOut)
