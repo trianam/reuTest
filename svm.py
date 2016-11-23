@@ -1,14 +1,10 @@
 import time
 import datetime
 import numpy as np
-import scipy as sp
-import pandas as pd
-import csv
 import sklearn as sl
 import sklearn.feature_extraction.text 
 import sklearn.svm
-import sklearn.cross_validation
-import sys
+import sklearn.model_selection
 import notifier
 import nltk
 import matplotlib
@@ -36,7 +32,6 @@ random_state = np.random.RandomState(42)
 stemmer = nltk.stem.snowball.EnglishStemmer(ignore_stopwords=True)
 analyzer = sl.feature_extraction.text.CountVectorizer(analyzer='word', token_pattern=tokenPattern).build_analyzer()
 modAnalyzer = lambda doc: (stemmer.stem(w) for w in analyzer(doc))
-#modAnalyzer = analyzer
 
 time0 = time.time()
 
@@ -55,23 +50,23 @@ for i,fid in enumerate(reuters.fileids()):
     for cat in reuters.categories(fid):
         Y[i,catIndex[cat]] = 1
 
-trainX, testX, trainY, testY = sl.cross_validation.train_test_split(X, Y, test_size=.2, random_state=random_state)
+trainX, testX, trainY, testY = sl.model_selection.train_test_split(X, Y, test_size=.2, random_state=random_state)
 
 print("{0:.1f} sec - Tokenizing".format(time.time()-time0))
-vectorizer = sklearn.feature_extraction.text.TfidfVectorizer(min_df=cutOff, max_df=0.5, max_features=9947, analyzer=modAnalyzer, stop_words=stemmer.stopwords)
+vectorizer = sl.feature_extraction.text.TfidfVectorizer(min_df=cutOff, max_df=0.5, max_features=9947, analyzer=modAnalyzer, stop_words=stemmer.stopwords)
 trainXV = vectorizer.fit_transform(trainX)
 testXV = vectorizer.transform(testX)
 
 np.savetxt(fileTokens, vectorizer.get_feature_names(), '%s')
 
 print("{0:.1f} sec - Training".format(time.time()-time0))
-clf = sklearn.multiclass.OneVsRestClassifier(sklearn.svm.LinearSVC(random_state=random_state))
+clf = sl.multiclass.OneVsRestClassifier(sl.svm.LinearSVC(random_state=random_state))
 
 yScore = clf.fit(trainXV, trainY).decision_function(testXV)
 
 
-precision, recall, threshold = sklearn.metrics.precision_recall_curve(testY.ravel(),yScore.ravel())
-average_precision = sklearn.metrics.average_precision_score(testY, yScore, average="micro")
+precision, recall, threshold = sl.metrics.precision_recall_curve(testY.ravel(),yScore.ravel())
+average_precision = sl.metrics.average_precision_score(testY, yScore, average="micro")
 
 indexClass = dict()
 precisionClass = dict()
@@ -83,16 +78,16 @@ classesToPlot = ['earn', 'acq', 'money-fx', 'grain', 'crude', 'trade', 'interest
 for className in classesToPlot:
     index = catIndex[className]
 
-    precisionClass[className], recallClass[className], _ = sklearn.metrics.precision_recall_curve(testY[:,index],yScore[:,index])
-    average_precisionClass[className] = sklearn.metrics.average_precision_score(testY[:,index], yScore[:,index])
+    precisionClass[className], recallClass[className], _ = sl.metrics.precision_recall_curve(testY[:,index],yScore[:,index])
+    average_precisionClass[className] = sl.metrics.average_precision_score(testY[:,index], yScore[:,index])
 
 numClasses = testY.shape[1]
 precisionAll = dict()
 recallAll = dict()
 average_precisionAll = dict()
 for i in range(numClasses):
-    precisionAll[i], recallAll[i], _ = sklearn.metrics.precision_recall_curve(testY[:,i],yScore[:,i])
-    average_precisionAll[i] = sklearn.metrics.average_precision_score(testY[:,i], yScore[:,i])
+    precisionAll[i], recallAll[i], _ = sl.metrics.precision_recall_curve(testY[:,i],yScore[:,i])
+    average_precisionAll[i] = sl.metrics.average_precision_score(testY[:,i], yScore[:,i])
 
 plt.clf()
 ax = plt.figure().gca()
